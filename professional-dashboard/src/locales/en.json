@@ -1,0 +1,16 @@
+{
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome back",
+    "stats": "Your Stats",
+    "total_requests": "Total Requests",
+    "completed": "Completed Jobs",
+    "earnings": "Total Earnings",
+    "pending": "Pending Requests"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "loading": "Loading..."
+  }
+}
