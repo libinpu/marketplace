@@ -20,6 +20,7 @@ import {
 import { categoryColors, categoryIcons, serviceGroups, API } from '../constants';
 import { BookingModal } from '../components/BookingModal';
 import { useToast, Toast } from '../components/Toast';
+import { useTranslation } from 'react-i18next';
 
 import keralaCarpentry from '../assets/kerala/carpentry.jpg';
 import keralaGardening from '../assets/kerala/gardening.jpg';
@@ -111,6 +112,7 @@ function Services({ navigate, initialGroup = null, initialCategory = null }) {
   const [selectedSubcat, setSelectedSubcat] = useState(null);
   const [subcatProTab, setSubcatProTab] = useState('all'); // 'all' | 'nearby'
   const { toast, showToast } = useToast();
+  const { t, i18n } = useTranslation();
   const nearbyLimitKm = 15;
 
   const handleOpenSubcatPros = (subcat) => {
@@ -148,18 +150,18 @@ function Services({ navigate, initialGroup = null, initialCategory = null }) {
   };
 
   useEffect(() => {
-    fetch(`${API}/categories`)
+    fetch(`${API}/categories?lang=${i18n.language}`)
       .then(r => r.json())
       .then(data => setCategories(Array.isArray(data) ? data : []))
       .catch(() => showToast('Failed to load categories', 'error'))
       .finally(() => setLoadingCats(false));
 
-    fetch(`${API}/subcategories`)
+    fetch(`${API}/subcategories?lang=${i18n.language}`)
       .then(r => r.json())
       .then(data => setSubcategories(Array.isArray(data) ? data : []))
       .catch(err => console.error('Failed to load subcategories:', err))
       .finally(() => setLoadingSubcats(false));
-  }, []);
+  }, [i18n.language]);
 
   const requestLocation = () => new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
@@ -313,17 +315,17 @@ function Services({ navigate, initialGroup = null, initialCategory = null }) {
         <div className="services-heading-row">
           <div>
             <h1 className="page-title">
-              {activeGroup === 'all' ? 'Find a Service' : activeGroup}
+              {activeGroup === 'all' ? t('services.find_service') : activeGroup}
             </h1>
             <p className="page-subtitle">
               {activeGroup === 'all'
-                ? 'Choose a category and send one request to nearby verified professionals.'
+                ? t('services.find_desc')
                 : `Choose a ${activeGroup.toLowerCase()} service and connect with a trusted professional.`}
             </p>
           </div>
           {activeGroup !== 'all' && (
             <button className="show-all-services-btn" onClick={() => { setActiveGroup('all'); navigate && navigate('services'); }}>
-              <Tags size={16} /> Show all services
+              <Tags size={16} /> {t('services.show_all')}
             </button>
           )}
         </div>
@@ -338,8 +340,8 @@ function Services({ navigate, initialGroup = null, initialCategory = null }) {
           <MapPin size={16} />
           <span>
             {locationStatus === 'ready' 
-              ? location?.placeName || 'Location found' 
-              : 'Enable location'}
+              ? location?.placeName || t('services.location_found') 
+              : t('services.enable_location')}
           </span>
           <ChevronRight size={14} />
         </button>
@@ -354,42 +356,42 @@ function Services({ navigate, initialGroup = null, initialCategory = null }) {
               onClick={() => setActiveGroup('all')}
             >
               <Tags size={15} />
-              <span>All Services</span>
+              <span>{t('services.all_services')}</span>
             </button>
             <button 
               className={`services-group-tab ${activeGroup === 'Home Repairs' ? 'active' : ''}`}
               onClick={() => setActiveGroup('Home Repairs')}
             >
               <Wrench size={15} />
-              <span>Home Repairs</span>
+              <span>{t('services.home_repairs')}</span>
             </button>
             <button 
               className={`services-group-tab ${activeGroup === 'Personal Care' ? 'active' : ''}`}
               onClick={() => setActiveGroup('Personal Care')}
             >
               <Sparkles size={15} />
-              <span>Personal Care</span>
+              <span>{t('services.personal_care')}</span>
             </button>
             <button 
               className={`services-group-tab ${activeGroup === 'Home Services' ? 'active' : ''}`}
               onClick={() => setActiveGroup('Home Services')}
             >
               <Home size={15} />
-              <span>Home Services</span>
+              <span>{t('services.home_services')}</span>
             </button>
             <button 
               className={`services-group-tab ${activeGroup === 'Education' ? 'active' : ''}`}
               onClick={() => setActiveGroup('Education')}
             >
               <Monitor size={15} />
-              <span>Education</span>
+              <span>{t('services.education')}</span>
             </button>
             <button 
               className={`services-group-tab ${activeGroup === 'Vehicle Services' ? 'active' : ''}`}
               onClick={() => setActiveGroup('Vehicle Services')}
             >
               <Car size={15} />
-              <span>Vehicle Services</span>
+              <span>{t('services.vehicle_services')}</span>
             </button>
           </div>
         </div>
@@ -467,7 +469,7 @@ function Services({ navigate, initialGroup = null, initialCategory = null }) {
               <Search size={16} color="#64748b" />
               <input
                 type="text"
-                placeholder="Search all services & sub-categories (e.g. pipe leak, AC clean, fan fitting, painting, lock)..."
+                placeholder={t('services.search_subcat')}
                 value={subcatSearch}
                 onChange={(e) => setSubcatSearch(e.target.value)}
               />
@@ -610,11 +612,11 @@ function Services({ navigate, initialGroup = null, initialCategory = null }) {
       {selected && !selectedSubcat && (
         <div className="provider-selection-page fade-up">
           <button className="provider-back-btn" onClick={() => { setSelectedSubcat(null); setSelected(null); }}>
-            <ArrowLeft size={16} /> Back to all services
+            <ArrowLeft size={16} /> {t('services.back_to_services')}
           </button>
           <div className="provider-selection-header">
             <div>
-              <span className="service-group-eyebrow">STEP 1 OF 2 • SPECIALIZED SERVICES</span>
+              <span className="service-group-eyebrow">{t('services.step_1')}</span>
               <h2>
               {(() => {
                 const CategoryIcon = categoryIcons[selected.name] || Tags;
@@ -630,7 +632,7 @@ function Services({ navigate, initialGroup = null, initialCategory = null }) {
                   className="broadcast-request-btn"
                   onClick={() => setBooking({ professional: null, category: selected.name, location })}
                 >
-                  Auto-assign for me
+                  {t('services.auto_assign')}
                 </button>
               )}
             </div>
@@ -647,10 +649,10 @@ function Services({ navigate, initialGroup = null, initialCategory = null }) {
               <div className="cat-subcategories-section fade-up">
                 <div className="cat-subcategories-header">
                   <div>
-                    <span className="subcat-section-tag">POPULAR {selected.name.toUpperCase()} SERVICES</span>
-                    <h3 className="subcat-section-title">Select a Specific Service to Book</h3>
+                    <span className="subcat-section-tag">{t('services.popular_services')}</span>
+                    <h3 className="subcat-section-title">{t('services.select_specific')}</h3>
                     <p className="subcat-section-subtitle">
-                      Visual guide of specialized services. Click <strong>Find Pros</strong> to open the specialist directory for that service.
+                      {t('services.visual_guide')}
                     </p>
                   </div>
                   <span className="subcat-count-pill">{catSubcats.length} Sub-Categories</span>
@@ -710,8 +712,8 @@ function Services({ navigate, initialGroup = null, initialCategory = null }) {
           <div style={{ marginTop: 36 }}>
             <div className="professional-section-heading">
               <div>
-                <h3>All {selected.name} Professionals</h3>
-                <p>Browse general verified contractors registered across this category.</p>
+                <h3>{t('services.all_pros')}</h3>
+                <p>{t('services.browse_pros')}</p>
               </div>
               <span className="section-count">{professionals.length}</span>
             </div>
@@ -723,8 +725,8 @@ function Services({ navigate, initialGroup = null, initialCategory = null }) {
             ) : professionals.length === 0 ? (
               <div className="empty-state">
                 <div style={{ fontSize: 40 }}>🔍</div>
-                <h3>No professionals found</h3>
-                <p>No verified professionals in this category yet.</p>
+                <h3>{t('services.no_pros')}</h3>
+                <p>{t('services.no_pros_desc')}</p>
               </div>
             ) : (
               <div className="professionals-grid">
@@ -752,7 +754,7 @@ function Services({ navigate, initialGroup = null, initialCategory = null }) {
             {/* Top Navigation Bar */}
             <div className="subcat-pros-nav-bar">
               <button className="subcat-pros-back-btn" onClick={() => setSelectedSubcat(null)}>
-                <ArrowLeft size={16} /> Back to {selected.name} Services
+                <ArrowLeft size={16} /> {t('services.back_to')} {selected.name}
               </button>
               <div className="subcat-pros-breadcrumb">
                 <span style={{ cursor: 'pointer' }} onClick={() => { setSelected(null); setSelectedSubcat(null); }}>Services</span>

@@ -55,9 +55,12 @@ exports.updateProfile = async (req, res) => {
 // GET /api/user/categories - list all service categories
 exports.getCategories = async (req, res) => {
     try {
-        const result = await pool.query(
-            'SELECT id, name, description FROM categories ORDER BY name ASC'
-        );
+        const { lang } = req.query;
+        let selectQuery = 'SELECT id, name, description FROM categories ORDER BY name ASC';
+        if (lang === 'ml') {
+            selectQuery = 'SELECT id, COALESCE(name_ml, name) AS name, COALESCE(description_ml, description) AS description FROM categories ORDER BY name ASC';
+        }
+        const result = await pool.query(selectQuery);
         res.json(result.rows);
     } catch (err) {
         console.error('getCategories error:', err);
@@ -68,8 +71,11 @@ exports.getCategories = async (req, res) => {
 // GET /api/user/subcategories - list all subcategories or filter by ?category=...
 exports.getSubcategories = async (req, res) => {
     try {
-        const { category } = req.query;
+        const { category, lang } = req.query;
         let query = 'SELECT id, category_id, category_name, name, image_url, price_estimate FROM subcategories';
+        if (lang === 'ml') {
+            query = 'SELECT id, category_id, COALESCE(category_name_ml, category_name) AS category_name, COALESCE(name_ml, name) AS name, image_url, price_estimate FROM subcategories';
+        }
         const params = [];
         if (category) {
             query += ' WHERE LOWER(category_name) = LOWER($1)';

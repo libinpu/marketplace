@@ -1,0 +1,91 @@
+{
+  "profile": {
+    "title": "My Profile",
+    "subtitle": "Keep your details ready for every booking.",
+    "account": "ACCOUNT",
+    "edit_profile": "Edit profile",
+    "cancel": "Cancel",
+    "customer_account": "Customer account",
+    "personal_details": "PERSONAL DETAILS",
+    "contact_info": "Contact information",
+    "save_changes": "Save changes",
+    "saving": "Saving...",
+    "email": "Email address",
+    "phone": "Phone number",
+    "address": "Address",
+    "add_address": "Add your service address",
+    "preferences": "PREFERENCES",
+    "language": "Language",
+    "choose_language": "Choose the language you prefer for your account.",
+    "logout": "Log out"
+  },
+  "home": {
+    "categories": "Service Categories",
+    "view_all": "View all",
+    "popular_services": "Popular Services",
+    "top_pros": "Top Professionals",
+    "how_it_works": "How Our App Works",
+    "simple_fast": "SIMPLE & FAST",
+    "step1": "Choose a Service",
+    "step1_desc": "Browse categories or search for the exact service you need in seconds.",
+    "step2": "Book a Verified Pro",
+    "step2_desc": "Connect with background-checked, top-rated local professionals.",
+    "step3": "Track & Enjoy",
+    "step3_desc": "Track work status in real time and enjoy guaranteed satisfaction.",
+    "search_placeholder": "Search for services..."
+  },
+  "services": {
+    "find_service": "Find a Service",
+    "find_desc": "Choose a category and send one request to nearby verified professionals.",
+    "show_all": "Show all services",
+    "enable_location": "Enable location",
+    "location_found": "Location found",
+    "search_subcat": "Search all services & sub-categories (e.g. pipe leak, AC clean, fan fitting, painting, lock)...",
+    "all_services": "All Services",
+    "home_repairs": "Home Repairs",
+    "personal_care": "Personal Care",
+    "home_services": "Home Services",
+    "education": "Education",
+    "vehicle_services": "Vehicle Services",
+    "step_1": "STEP 1 OF 2 • SPECIALIZED SERVICES",
+    "auto_assign": "Auto-assign for me",
+    "popular_services": "POPULAR SERVICES",
+    "select_specific": "Select a Specific Service to Book",
+    "visual_guide": "Visual guide of specialized services. Click Find Pros to open the specialist directory for that service.",
+    "all_pros": "All Professionals",
+    "browse_pros": "Browse general verified contractors registered across this category.",
+    "no_pros": "No professionals found",
+    "no_pros_desc": "No verified professionals in this category yet.",
+    "back_to_services": "Back to Services",
+    "back_to": "Back to"
+  },
+  "service_items": {
+    "cleaning": "Cleaning",
+    "painting": "Painting",
+    "plumbing": "Plumbing",
+    "electrician": "Electrician",
+    "ac_repair": "AC & Appliance",
+    "carpentry": "Carpentry",
+    "gardening": "Gardening",
+    "security": "CCTV & Security"
+  },
+  "popular_services": {
+    "ac_repair": "AC Repair & Service",
+    "home_cleaning": "Home Cleaning",
+    "cooking": "Cooking & Meal Prep",
+    "interior_painting": "Interior Painting",
+    "plumbing_repairs": "Plumbing & Repairs"
+  },
+  "professionals": {
+    "hair_specialist": "Hair & Styling Specialist",
+    "master_electrician": "Master Electrician",
+    "deep_cleaning": "Deep Cleaning Expert",
+    "plumbing_specialist": "Plumbing Specialist"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "loading": "Loading...",
+    "error": "An error occurred"
+  }
+}
