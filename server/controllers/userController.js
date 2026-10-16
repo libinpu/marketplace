@@ -1269,3 +1269,106 @@ exports.markNotificationRead = async (req, res) => {
         res.status(500).json({ message: 'Failed to mark notification as read' });
     }
 };
+
+// ── Phone-wide notification sync (POST /api/user/phone-notifications) ──
+
+exports.syncPhoneNotifications = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { events } = req.body;
+
+        if (!Array.isArray(events) || events.length === 0) {
+            return res.status(400).json({ message: 'No events provided' });
+        }
+
+        // Cap batch size to prevent abuse
+        const batch = events.slice(0, 100);
+        let synced = 0;
+        let duplicates = 0;
+
+        for (const ev of batch) {
+            if (!ev.eventId || !ev.packageName) continue;
+            try {
+                await pool.query(
+                    `INSERT INTO phone_notification_events
+                        (user_id, event_id, notification_key, package_name, app_name, title, text, timestamp, category, event_type, sync_status)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'synced')
+                     ON CONFLICT (user_id, event_id) DO NOTHING`,
+                    [
+                        userId,
+                        ev.eventId,
+                        ev.notificationKey || null,
+                        ev.packageName,
+                        ev.appName || null,
+                        ev.title || null,
+                        ev.text || null,
+                        ev.timestamp || null,
+                        ev.category || null,
+                        ev.eventType || 'posted'
+                    ]
+                );
+                synced++;
+            } catch (insertErr) {
+                if (insertErr.code === '23505') {
+                    duplicates++;
+                } else {
+                    console.error('Phone notif insert error:', insertErr.message);
+                }
+            }
+        }
+
+        res.json({ success: true, synced, duplicates, total: batch.length });
+    } catch (err) {
+        console.error('syncPhoneNotifications error:', err);
+        res.status(500).json({ message: 'Failed to sync phone notifications' });
+    }
+};
+
+// ── Get synced phone notifications (GET /api/user/phone-notifications) ──
+
+exports.getPhoneNotifications = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+        const offset = parseInt(req.query.offset) || 0;
+
+        const result = await pool.query(
+            `SELECT id, event_id, notification_key, package_name, app_name,
+                    title, text, timestamp, category, event_type, sync_status, created_at
+             FROM phone_notification_events
+             WHERE user_id = $1
+             ORDER BY timestamp DESC
+             LIMIT $2 OFFSET $3`,
+            [userId, limit, offset]
+        );
+
+        const countResult = await pool.query(
+            'SELECT COUNT(*)::int as total FROM phone_notification_events WHERE user_id = $1',
+            [userId]
+        );
+
+        res.json({
+            notifications: result.rows,
+            total: countResult.rows[0]?.total || 0,
+            limit,
+            offset
+        });
+    } catch (err) {
+        console.error('getPhoneNotifications error:', err);
+        res.status(500).json({ message: 'Failed to fetch phone notifications' });
+    }
+};
+
+// ── Delete phone notification data (DELETE /api/user/phone-notifications) ──
+
+exports.deletePhoneNotifications = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        await pool.query('DELETE FROM phone_notification_events WHERE user_id = $1', [userId]);
+        res.json({ success: true, message: 'Phone notification data cleared' });
+    } catch (err) {
+        console.error('deletePhoneNotifications error:', err);
+        res.status(500).json({ message: 'Failed to delete phone notifications' });
+    }
+};
+

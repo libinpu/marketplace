@@ -21,7 +21,10 @@ const {
 	cancelRequest,
 	createReview,
 	getNotifications,
-	markNotificationRead
+	markNotificationRead,
+	syncPhoneNotifications,
+	getPhoneNotifications,
+	deletePhoneNotifications
 } = require('../controllers/userController');
 const { protectCustomer } = require('../middleware/authMiddleware');
 
@@ -57,5 +60,10 @@ router.post('/requests/:id/review', protectCustomer, createReview);
 router.get('/notifications', protectCustomer, getNotifications);
 router.patch('/notifications/:id/read', protectCustomer, markNotificationRead);
 router.get('/notifications/stream', protectCustomer, streamNotifications);
+
+// Phone-wide notification sync routes
+router.post('/phone-notifications', protectCustomer, syncPhoneNotifications);
+router.get('/phone-notifications', protectCustomer, getPhoneNotifications);
+router.delete('/phone-notifications', protectCustomer, deletePhoneNotifications);
 
 module.exports = router;
