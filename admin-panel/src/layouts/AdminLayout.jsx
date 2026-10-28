@@ -11,6 +11,7 @@ import {
   CreditCard, 
   MessageSquareWarning, 
   Tags, 
+  MapPin,
   Search, 
   Bell, 
   Settings 
@@ -69,6 +70,9 @@ function AdminLayout() {
           </NavLink>
           <NavLink to="/categories" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
             <Tags className="nav-icon" /> Services & Pricing
+          </NavLink>
+          <NavLink to="/pricing" className={({isActive}) => isActive ? "nav-item active" : "nav-item"}>
+            <MapPin className="nav-icon" /> Location & Category Pricing
           </NavLink>
         </nav>
       </aside>

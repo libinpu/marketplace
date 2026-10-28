@@ -10,6 +10,7 @@ import Reviews from "./pages/Reviews";
 import Payments from "./pages/Payments";
 import Complaints from "./pages/Complaints";
 import Categories from "./pages/Categories";
+import LocationPricing from "./pages/LocationPricing";
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
           <Route path="payments" element={<Payments />} />
           <Route path="complaints" element={<Complaints />} />
           <Route path="categories" element={<Categories />} />
+          <Route path="pricing" element={<LocationPricing />} />
         </Route>
       </Routes>
     </BrowserRouter>

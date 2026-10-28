@@ -271,6 +271,58 @@ const detectDistrictFromTextOrCoords = (text, coords) => {
   return 'Thiruvananthapuram';
 };
 
+const KERALA_CITIES_MAP = {
+  'ottappalam': { city: 'Ottappalam', district: 'Palakkad' },
+  'palakkad': { city: 'Palakkad', district: 'Palakkad' },
+  'chittur': { city: 'Chittur', district: 'Palakkad' },
+  'mannarkkad': { city: 'Mannarkkad', district: 'Palakkad' },
+  'pattambi': { city: 'Pattambi', district: 'Palakkad' },
+  'shoranur': { city: 'Shoranur', district: 'Palakkad' },
+  'kottayam': { city: 'Kottayam', district: 'Kottayam' },
+  'changanassery': { city: 'Changanassery', district: 'Kottayam' },
+  'pala': { city: 'Pala', district: 'Kottayam' },
+  'vaikom': { city: 'Vaikom', district: 'Kottayam' },
+  'erattupetta': { city: 'Erattupetta', district: 'Kottayam' },
+  'kochi': { city: 'Kochi', district: 'Ernakulam' },
+  'cochin': { city: 'Kochi', district: 'Ernakulam' },
+  'ernakulam': { city: 'Kochi', district: 'Ernakulam' },
+  'aluva': { city: 'Aluva', district: 'Ernakulam' },
+  'thrissur': { city: 'Thrissur', district: 'Thrissur' },
+  'trichur': { city: 'Thrissur', district: 'Thrissur' },
+  'chalakudy': { city: 'Chalakudy', district: 'Thrissur' },
+  'guruvayur': { city: 'Guruvayur', district: 'Thrissur' },
+  'thiruvananthapuram': { city: 'Thiruvananthapuram', district: 'Thiruvananthapuram' },
+  'trivandrum': { city: 'Thiruvananthapuram', district: 'Thiruvananthapuram' },
+  'kazhakkoottam': { city: 'Kazhakkoottam', district: 'Thiruvananthapuram' },
+  'attingal': { city: 'Attingal', district: 'Thiruvananthapuram' },
+  'kozhikode': { city: 'Kozhikode', district: 'Kozhikode' },
+  'calicut': { city: 'Kozhikode', district: 'Kozhikode' },
+  'kollam': { city: 'Kollam', district: 'Kollam' },
+  'quilon': { city: 'Kollam', district: 'Kollam' },
+  'alappuzha': { city: 'Alappuzha', district: 'Alappuzha' },
+  'alleppey': { city: 'Alappuzha', district: 'Alappuzha' },
+  'kannur': { city: 'Kannur', district: 'Kannur' },
+  'malappuram': { city: 'Malappuram', district: 'Malappuram' },
+  'kasaragod': { city: 'Kasaragod', district: 'Kasaragod' },
+  'pathanamthitta': { city: 'Pathanamthitta', district: 'Pathanamthitta' },
+  'thodupuzha': { city: 'Thodupuzha', district: 'Idukki' },
+  'kalpetta': { city: 'Kalpetta', district: 'Wayanad' }
+};
+
+const detectCityAndDistrictFromTextOrCoords = (text, coords) => {
+  if (text && typeof text === 'string') {
+    const lower = text.toLowerCase();
+    for (const [key, val] of Object.entries(KERALA_CITIES_MAP)) {
+      const regex = new RegExp(`\\b${key}\\b`, 'i');
+      if (regex.test(lower)) {
+        return val;
+      }
+    }
+  }
+  const dist = detectDistrictFromTextOrCoords(text, coords);
+  return { city: dist, district: dist };
+};
+
 const SERVER_BASE = import.meta.env.DEV ? 'https://service-marketplace-af7p.onrender.com' : 'https://service-marketplace-af7p.onrender.com';
 
 export function BookingModal({
@@ -404,18 +456,24 @@ export function BookingModal({
   const [savedAddresses, setSavedAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState(null);
 
-  const [destinationDistrict, setDestinationDistrict] = useState(() => {
-    return detectDistrictFromTextOrCoords(
-      currentLocation?.placeName || '',
-      currentLocation
-    );
-  });
-  const [customerCurrentDistrict, setCustomerCurrentDistrict] = useState(() => {
-    return detectDistrictFromTextOrCoords(
-      currentLocation?.placeName || '',
-      currentLocation
-    );
-  });
+  const initialLocInfo = detectCityAndDistrictFromTextOrCoords(
+    currentLocation?.placeName || '',
+    currentLocation
+  );
+
+  const [destinationCity, setDestinationCity] = useState(
+    professional?.city || initialLocInfo.city || 'Kottayam'
+  );
+  const [destinationDistrict, setDestinationDistrict] = useState(
+    professional?.district || initialLocInfo.district || 'Kottayam'
+  );
+  const [destinationLocality, setDestinationLocality] = useState('');
+  const [customerCurrentCity, setCustomerCurrentCity] = useState(
+    initialLocInfo.city || 'Ottappalam'
+  );
+  const [customerCurrentDistrict, setCustomerCurrentDistrict] = useState(
+    initialLocInfo.district || 'Palakkad'
+  );
   const [districtPricingTiers, setDistrictPricingTiers] = useState(DEFAULT_DISTRICT_TIERS);
 
   // Fetch live district pricing tiers from backend
@@ -443,9 +501,27 @@ export function BookingModal({
 
   const handleDestinationDistrictChange = (dist) => {
     setDestinationDistrict(dist);
+    setDestinationLocality('');
+    const cities = Object.values(KERALA_CITIES_MAP)
+      .filter((c) => c.district.toLowerCase() === dist.toLowerCase())
+      .map((c) => c.city);
+    if (cities.length > 0) {
+      setDestinationCity(cities[0]);
+    } else {
+      setDestinationCity(dist);
+    }
     const center = DISTRICT_CENTERS[dist];
     if (center) {
       setDetectedCoords({ latitude: center.latitude, longitude: center.longitude });
+    }
+  };
+
+  const handleDestinationCityChange = (newCity) => {
+    setDestinationCity(newCity);
+    setDestinationLocality('');
+    const found = KERALA_CITIES_MAP[newCity.toLowerCase()];
+    if (found) {
+      setDestinationDistrict(found.district);
     }
   };
 
@@ -565,6 +641,12 @@ export function BookingModal({
         const detectedDist = detectDistrictFromTextOrCoords(formatted, { latitude: lat, longitude: lon });
         setCustomerCurrentDistrict(detectedDist);
         setDestinationDistrict(detectedDist);
+        if (city) {
+          setDestinationCity(city);
+        }
+        if (locality) {
+          setDestinationLocality(locality);
+        }
         if (locality || street) {
           setLandmark(`Near ${locality || street}`);
         }
@@ -613,6 +695,14 @@ export function BookingModal({
       longitude: addr.longitude ? parseFloat(addr.longitude) : null,
     });
     setDestinationDistrict(detectedDist);
+    if (addr.city) {
+      setDestinationCity(addr.city);
+    }
+    if (addr.locality) {
+      setDestinationLocality(addr.locality);
+    } else if (addr.landmark) {
+      setDestinationLocality(addr.landmark);
+    }
     if (addr.latitude && addr.longitude) {
       setDetectedCoords({ latitude: parseFloat(addr.latitude), longitude: parseFloat(addr.longitude) });
     } else if (DISTRICT_CENTERS[detectedDist]) {
@@ -766,14 +856,118 @@ export function BookingModal({
   const [proSearch, setProSearch] = useState('');
   const [selectedPro, setSelectedPro] = useState(professional || null);
 
-  // Destination district dynamic pricing calculations
-  const baseProRate = selectedPro?.base_hourly_rate || (selectedPro?.hourly_rate ? Math.round(selectedPro.hourly_rate / (1 + (currentMarkup / 100))) : 300);
-  const proRate = Math.round(baseProRate * (1 + currentMarkup / 100));
-  const baseEstimatedServiceCost = 150;
-  const estimatedServiceCost = Math.round(baseEstimatedServiceCost * (1 + currentMarkup / 100));
-  const platformFee = 20;
-  const surgeDifference = Math.max(0, (proRate - baseProRate) + (estimatedServiceCost - baseEstimatedServiceCost));
-  const bookingPayableTotal = proRate + estimatedServiceCost + platformFee;
+  // Authoritative Dynamic Category & City Pricing
+  const [dynamicPricing, setDynamicPricing] = useState({
+    price: null,
+    base_price: null,
+    applied_adjustment: null,
+    exact_override: null,
+    travel: null,
+    estimated_total: null,
+    loading: false,
+    available: false,
+    message: '',
+    source: null,
+    district: '',
+    city: '',
+    locality: '',
+    category: ''
+  });
+
+  // Business Rule: Service Pricing must use the confirmed address where the work will occur.
+  const effectiveServiceCity = destinationCity || selectedPro?.city || 'Kottayam';
+  const effectiveServiceDistrict = destinationDistrict || selectedPro?.district || 'Kottayam';
+  const effectiveServiceLocality = destinationLocality.trim();
+
+  useEffect(() => {
+    let isCancelled = false;
+    // Clear stale price immediately so customer never sees old address rate while loading
+    setDynamicPricing((prev) => ({
+      ...prev,
+      price: null,
+      estimated_total: null,
+      loading: true,
+      message: ''
+    }));
+
+    const proParam = selectedPro?.id ? `&professional_id=${selectedPro.id}` : '';
+    const locParam = effectiveServiceLocality ? `&locality=${encodeURIComponent(effectiveServiceLocality)}` : '';
+    const coordsParam = detectedCoords?.latitude && detectedCoords?.longitude
+      ? `&latitude=${detectedCoords.latitude}&longitude=${detectedCoords.longitude}`
+      : '';
+    const url = `${API}/pricing/lookup?city=${encodeURIComponent(effectiveServiceCity)}&district=${encodeURIComponent(effectiveServiceDistrict)}&category=${encodeURIComponent(serviceCategory)}${locParam}${proParam}${coordsParam}`;
+
+    fetch(url)
+      .then((res) => res.json())
+      .then((data) => {
+        if (isCancelled) return;
+        if (data.available && data.price != null) {
+          const breakdown = data.pricing_breakdown || {};
+          setDynamicPricing({
+            price: Number(data.price),
+            base_price: breakdown.base_price || Number(data.price),
+            applied_adjustment: breakdown.applied_adjustment || null,
+            exact_override: breakdown.exact_override || null,
+            travel: breakdown.travel || null,
+            estimated_total: breakdown.estimated_total || Number(data.price),
+            loading: false,
+            available: true,
+            message: '',
+            source: 'location_pricing_engine',
+            district: data.district || effectiveServiceDistrict,
+            city: data.city || effectiveServiceCity,
+            locality: data.locality || effectiveServiceLocality,
+            category: data.category_name || serviceCategory,
+          });
+        } else {
+          setDynamicPricing({
+            price: null,
+            base_price: null,
+            applied_adjustment: null,
+            exact_override: null,
+            travel: null,
+            estimated_total: null,
+            loading: false,
+            available: false,
+            message: data.message || 'Pricing is not configured for this service location. Please contact support.',
+            source: null,
+            district: effectiveServiceDistrict,
+            city: effectiveServiceCity,
+            locality: effectiveServiceLocality,
+            category: serviceCategory,
+          });
+        }
+      })
+      .catch((err) => {
+        if (isCancelled) return;
+        setDynamicPricing({
+          price: null,
+          base_price: null,
+          applied_adjustment: null,
+          exact_override: null,
+          travel: null,
+          estimated_total: null,
+          loading: false,
+          available: false,
+          message: 'Unable to reach pricing server. Please check your network connection.',
+          source: null,
+          district: effectiveServiceDistrict,
+          city: effectiveServiceCity,
+          locality: effectiveServiceLocality,
+          category: serviceCategory,
+        });
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [effectiveServiceCity, effectiveServiceDistrict, effectiveServiceLocality, serviceCategory, selectedPro?.id, detectedCoords?.latitude, detectedCoords?.longitude]);
+
+  const proRate = dynamicPricing.price || 0;
+  const travelFee = 0; // Travel expenses removed
+  const platformFee = 0;
+  const surgeDifference = 0;
+  const bookingPayableTotal = proRate;
 
   // Step 9: Confirmed details
   const [confirmedRequest, setConfirmedRequest] = useState(null);
@@ -784,7 +978,8 @@ export function BookingModal({
     const coordsQuery = detectedCoords?.latitude && detectedCoords?.longitude
       ? `&latitude=${detectedCoords.latitude}&longitude=${detectedCoords.longitude}`
       : '';
-    fetch(`${API}/professionals?category=${encodeURIComponent(serviceCategory)}&district=${encodeURIComponent(destinationDistrict)}${coordsQuery}`)
+    const cityParam = destinationCity ? `&city=${encodeURIComponent(destinationCity)}` : '';
+    fetch(`${API}/professionals?category=${encodeURIComponent(serviceCategory)}&district=${encodeURIComponent(destinationDistrict)}${cityParam}${coordsQuery}`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (Array.isArray(data)) {
@@ -793,7 +988,8 @@ export function BookingModal({
               ? (p.profile_photo.startsWith('http') ? p.profile_photo : `${SERVER_BASE}${p.profile_photo}`)
               : null;
             const bRate = 200 + Math.min(Number(p.experience_years) || 0, 12) * 25;
-            const adjRate = Math.round(bRate * (1 + currentMarkup / 100));
+            // Use authoritative local wage for destination city if provided by backend, else fallback
+            const adjRate = p.hourly_rate != null ? Math.round(Number(p.hourly_rate)) : Math.round(bRate * (1 + currentMarkup / 100));
             return {
               id: p.id,
               full_name: p.full_name,
@@ -894,6 +1090,10 @@ export function BookingModal({
     setErrorMsg('');
 
     try {
+      if (!dynamicPricing.available || dynamicPricing.price == null) {
+        throw new Error(dynamicPricing.message || 'Pricing is not configured for this service location. Please contact support.');
+      }
+
       const token = localStorage.getItem('userToken');
       const formData = new FormData();
       formData.append('title', subService || 'Service Booking');
@@ -901,7 +1101,7 @@ export function BookingModal({
       const extraNotes = [
         description,
         landmark ? `Landmark: ${landmark}` : '',
-        `Service District: ${destinationDistrict} (${currentTierName})`,
+        `Service City: ${effectiveServiceCity}, District: ${effectiveServiceDistrict}`,
         accessInstructions ? `Access Instructions: ${accessInstructions}` : '',
         reqBringTools ? 'Tools required' : '',
         reqNeedInvoice ? 'Invoice required' : '',
@@ -912,7 +1112,12 @@ export function BookingModal({
       formData.append('description', extraNotes);
       formData.append('requested_at', getScheduledTimestamp());
       formData.append('location', addressLine);
-      formData.append('district', destinationDistrict);
+      formData.append('city', effectiveServiceCity);
+      formData.append('service_city', effectiveServiceCity);
+      formData.append('district', effectiveServiceDistrict);
+      if (effectiveServiceLocality) {
+        formData.append('locality', effectiveServiceLocality);
+      }
       formData.append('pricing_markup_percentage', currentMarkup);
       formData.append('category', serviceCategory);
 
@@ -959,14 +1164,18 @@ export function BookingModal({
         title: subService,
         category: serviceCategory,
         location: addressLine,
-        district: destinationDistrict,
+        city: effectiveServiceCity,
+        service_city: effectiveServiceCity,
+        district: effectiveServiceDistrict,
         pricing_markup_percentage: currentMarkup,
         requested_at: getScheduledTimestamp(),
       };
 
       setConfirmedRequest({
         ...created,
-        district: destinationDistrict,
+        city: effectiveServiceCity,
+        service_city: effectiveServiceCity,
+        district: effectiveServiceDistrict,
         pricing_markup_percentage: currentMarkup,
         payment_status: 'pending',
         payment_method: 'cash',
@@ -1480,6 +1689,70 @@ export function BookingModal({
               <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.4, margin: 0 }}>
                 {addressLine}
               </p>
+            </div>
+
+            {/* Service Location City & District Confirmation */}
+            <div className="visily-card" style={{ marginTop: 8, background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '12px 14px', borderRadius: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Target Service Delivery City
+                </span>
+                <span style={{ fontSize: 11, background: '#E0F2FE', color: '#0369A1', fontWeight: 700, padding: '2px 8px', borderRadius: 4 }}>
+                  {destinationDistrict} District
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <select
+                  value={destinationCity}
+                  onChange={(e) => handleDestinationCityChange(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: '1px solid #CBD5E1',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: '#0F172A',
+                    background: '#FFFFFF',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {Object.values(KERALA_CITIES_MAP).map((c) => (
+                    <option key={`${c.district}-${c.city}`} value={c.city}>
+                      {c.city} ({c.district})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Area / Locality Input for specific sub-city pricing */}
+              <div style={{ marginTop: 10 }}>
+                <label style={{ fontSize: 11.5, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 4 }}>
+                  Locality / Area (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Town Center, West Fort, Kadavanthra"
+                  value={destinationLocality}
+                  onChange={(e) => setDestinationLocality(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: '1px solid #CBD5E1',
+                    fontSize: 13,
+                    color: '#0F172A',
+                    background: '#FFFFFF',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <small style={{ fontSize: 11, color: '#64748B', display: 'block', marginTop: 6 }}>
+                Authoritative dynamic pricing applies based on the selected city and locality.
+              </small>
             </div>
 
             {/* Landmark / Instructions */}
@@ -2315,57 +2588,120 @@ export function BookingModal({
                   fontSize: 12,
                 }}
               >
-                <span style={{ color: '#475569', fontWeight: 600 }}>Service District Tier</span>
+                <span style={{ color: '#475569', fontWeight: 600 }}>Service Delivery Location</span>
                 <span
                   style={{
-                    background: currentMarkup === 30 ? '#FEE2E2' : currentMarkup === 20 ? '#FEF3C7' : '#E0F2FE',
-                    color: currentMarkup === 30 ? '#991B1B' : currentMarkup === 20 ? '#92400E' : '#0369A1',
+                    background: '#E0F2FE',
+                    color: '#0369A1',
                     fontWeight: 700,
-                    fontSize: 11,
+                    fontSize: 11.5,
                     padding: '2px 8px',
                     borderRadius: 6,
                   }}
                 >
-                  {destinationDistrict} • {currentMarkup > 0 ? `+${currentMarkup}% Surge` : 'Standard Pricing'}
+                  {effectiveServiceLocality ? `${effectiveServiceLocality}, ` : ''}{effectiveServiceCity} • {effectiveServiceDistrict}
                 </span>
               </div>
 
               <div className="visily-cost-row">
-                <span>Professional Rate</span>
-                <strong>₹{proRate}</strong>
+                <span>Base Labour Price</span>
+                <strong>
+                  {dynamicPricing.loading ? (
+                    <span style={{ color: '#64748B' }}>Checking price...</span>
+                  ) : dynamicPricing.available ? (
+                    `₹${dynamicPricing.base_price}`
+                  ) : (
+                    <span style={{ color: '#DC2626' }}>Unavailable</span>
+                  )}
+                </strong>
               </div>
-              <div className="visily-cost-row">
-                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  Estimated Service Cost <Info size={13} color="#94A3B8" />
-                </span>
-                <strong>₹{estimatedServiceCost}</strong>
-              </div>
-              <div className="visily-cost-row">
-                <span>Platform Fee</span>
-                <strong>₹{platformFee}</strong>
-              </div>
-              {currentMarkup > 0 && (
-                <div className="visily-cost-row" style={{ color: '#D97706' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Sparkles size={13} /> District Dynamic Surge (+{currentMarkup}%)
+
+              {dynamicPricing.applied_adjustment && (
+                <div className="visily-cost-row">
+                  <span>
+                    Location Adjustment ({dynamicPricing.applied_adjustment.scope === 'locality'
+                      ? `Locality: ${dynamicPricing.locality || 'Specific Area'}`
+                      : dynamicPricing.applied_adjustment.scope === 'city'
+                      ? `City: ${dynamicPricing.city}`
+                      : dynamicPricing.applied_adjustment.scope === 'district'
+                      ? `District: ${dynamicPricing.district}`
+                      : 'Default Standard'})
                   </span>
-                  <strong>+₹{surgeDifference} included</strong>
+                  <span style={{ color: '#0369A1', fontWeight: 700 }}>
+                    {dynamicPricing.applied_adjustment.formatted}
+                  </span>
                 </div>
               )}
-              <div className="visily-cost-row total">
-                <span>Payable Total</span>
-                <span>₹{bookingPayableTotal}</span>
+
+              {dynamicPricing.exact_override && (
+                <div className="visily-cost-row" style={{ background: '#FEF3C7', padding: '4px 8px', borderRadius: 6 }}>
+                  <span style={{ color: '#92400E', fontWeight: 600 }}>
+                    Exact Manual Override ({dynamicPricing.exact_override.scope || 'Area'})
+                  </span>
+                  <span style={{ color: '#92400E', fontWeight: 800 }}>
+                    ₹{dynamicPricing.exact_override.exact_price}
+                  </span>
+                </div>
+              )}
+
+              <div className="visily-cost-row">
+                <span>Final Labour Charge</span>
+                <strong>
+                  {dynamicPricing.available ? `₹${dynamicPricing.price}` : '—'}
+                </strong>
               </div>
-              <small style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>
-                Inclusive of all destination district rates. Final amount may adjust if extra scope is added during service.
+
+
+
+              <div className="visily-cost-row total">
+                <span>Estimated Total</span>
+                <span style={{ color: dynamicPricing.available ? '#0D9488' : '#DC2626' }}>
+                  {dynamicPricing.loading
+                    ? 'Loading...'
+                    : dynamicPricing.available
+                    ? `₹${bookingPayableTotal}`
+                    : 'N/A'}
+                </span>
+              </div>
+              <small style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic', display: 'block', marginTop: 4 }}>
+                Authoritative location-specific calculation for {effectiveServiceLocality ? `${effectiveServiceLocality}, ` : ''}{effectiveServiceCity}, {effectiveServiceDistrict}.
               </small>
+              <p style={{ fontSize: 11, color: '#64748B', marginTop: 6, fontStyle: 'italic', lineHeight: 1.4, margin: '6px 0 0 0' }}>
+                * Clearly labeled estimate: Location-specific wage for the selected service address. No separate travel expenses.
+              </p>
             </div>
+
+            {/* Error or Missing Pricing Notice */}
+            {!dynamicPricing.available && !dynamicPricing.loading && (
+              <div
+                style={{
+                  padding: 12,
+                  background: '#FEF2F2',
+                  border: '1px solid #FCA5A5',
+                  borderRadius: 12,
+                  color: '#991B1B',
+                  fontSize: 13,
+                  marginTop: 10,
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 8,
+                }}
+              >
+                <AlertCircle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+                <div>
+                  <strong>Pricing Unavailable</strong>
+                  <p style={{ margin: '3px 0 0' }}>
+                    {dynamicPricing.message || 'Pricing is not configured for this service location. Please contact support.'}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {errorMsg && (
               <div
                 style={{
                   padding: 12,
-                  background: '#FEE2E2',
+                  background: '#FEF2F2',
                   border: '1px solid #FCA5A5',
                   borderRadius: 12,
                   color: '#991B1B',
@@ -2378,26 +2714,38 @@ export function BookingModal({
             )}
 
             {/* Zero Advance Payment / Cancellation Policy Notice */}
-            <div className="visily-trust-banner" style={{ marginTop: 10 }}>
-              <ShieldCheck size={20} color="#00796B" style={{ flexShrink: 0, marginTop: 1 }} />
-              <div>
-                <strong>Zero advance payment required.</strong> Pay ₹{bookingPayableTotal} directly to your professional after service completion. Free cancellation up to 2 hours before scheduled time.
+            {dynamicPricing.available && (
+              <div className="visily-trust-banner" style={{ marginTop: 10 }}>
+                <ShieldCheck size={20} color="#00796B" style={{ flexShrink: 0, marginTop: 1 }} />
+                <div>
+                  <strong>Zero advance payment required.</strong> Pay ₹{bookingPayableTotal} directly to your professional after service completion. Free cancellation up to 2 hours before scheduled time.
+                </div>
               </div>
-            </div>
+            )}
 
             <div style={{ marginTop: 'auto', paddingTop: 12 }}>
               <button
                 className="visily-pill-btn"
                 onClick={handleFinalBooking}
-                disabled={loading}
+                disabled={loading || dynamicPricing.loading || !dynamicPricing.available}
+                style={{
+                  opacity: (!dynamicPricing.available || dynamicPricing.loading) ? 0.6 : 1,
+                  cursor: (!dynamicPricing.available || dynamicPricing.loading) ? 'not-allowed' : 'pointer'
+                }}
               >
                 {loading ? (
                   <>
                     <Loader2 size={18} className="spin" /> Confirming Booking...
                   </>
+                ) : dynamicPricing.loading ? (
+                  <>
+                    <Loader2 size={18} className="spin" /> Fetching Price...
+                  </>
+                ) : !dynamicPricing.available ? (
+                  'Price Unavailable for Location'
                 ) : (
                   <>
-                    Confirm Booking <ArrowRight size={18} />
+                    Confirm Booking (₹{bookingPayableTotal}) <ArrowRight size={18} />
                   </>
                 )}
               </button>

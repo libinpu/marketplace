@@ -12,6 +12,8 @@ const {
 	getCategories,
 	getSubcategories,
 	getDistrictPricing,
+	lookupServicePrice,
+	getPricingLocations,
 	getProfessionals,
 	getCategoryReviews,
 	createRequest,
@@ -40,6 +42,8 @@ const upload = multer({
 router.get('/categories', getCategories);
 router.get('/subcategories', getSubcategories);
 router.get('/district-pricing', getDistrictPricing);
+router.get('/pricing/lookup', lookupServicePrice);
+router.get('/pricing/locations', getPricingLocations);
 router.get('/professionals', getProfessionals);
 router.get('/reviews', getCategoryReviews);
 router.get('/profile', protectCustomer, getProfile);

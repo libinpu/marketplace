@@ -124,6 +124,16 @@ async function startServer() {
             const sql023 = fs.readFileSync(migration023Path, 'utf-8');
             await pool.query(sql023);
         }
+        const migration024Path = path.join(__dirname, 'migrations', '024_create_location_category_pricing.sql');
+        if (fs.existsSync(migration024Path)) {
+            const sql024 = fs.readFileSync(migration024Path, 'utf-8');
+            await pool.query(sql024);
+        }
+        const migration025Path = path.join(__dirname, 'migrations', '025_create_location_based_pricing_system.sql');
+        if (fs.existsSync(migration025Path)) {
+            const sql025 = fs.readFileSync(migration025Path, 'utf-8');
+            await pool.query(sql025);
+        }
     } catch (error) {
         console.error('Migrations execution error:', error.message);
     }

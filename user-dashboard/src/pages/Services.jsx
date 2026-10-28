@@ -275,14 +275,17 @@ function Services({ navigate, initialGroup = null, initialCategory = null, user 
     return earthRadiusKm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
   };
 
-  const loadCategoriesAndSubcategories = () => {
-    fetch(`${API}/categories?lang=${i18n.language}`)
+  const loadCategoriesAndSubcategories = (targetPlace = locationName, targetDist = selectedDistrict) => {
+    const cityParam = targetPlace ? `&city=${encodeURIComponent(targetPlace)}` : '';
+    const distParam = targetDist ? `&district=${encodeURIComponent(targetDist)}` : '';
+
+    fetch(`${API}/categories?lang=${i18n.language}${cityParam}${distParam}`)
       .then(r => r.json())
       .then(data => setCategories(Array.isArray(data) ? data : []))
       .catch(() => showToast('Failed to load categories', 'error'))
       .finally(() => setLoadingCats(false));
 
-    fetch(`${API}/subcategories?lang=${i18n.language}`)
+    fetch(`${API}/subcategories?lang=${i18n.language}${cityParam}${distParam}`)
       .then(r => r.json())
       .then(data => setSubcategories(Array.isArray(data) ? data : []))
       .catch(err => console.error('Failed to load subcategories:', err))
@@ -290,10 +293,10 @@ function Services({ navigate, initialGroup = null, initialCategory = null, user 
   };
 
   useEffect(() => {
-    loadCategoriesAndSubcategories();
+    loadCategoriesAndSubcategories(locationName, selectedDistrict);
 
     const handleFocus = () => {
-      loadCategoriesAndSubcategories();
+      loadCategoriesAndSubcategories(locationName, selectedDistrict);
     };
 
     window.addEventListener('focus', handleFocus);
@@ -302,7 +305,7 @@ function Services({ navigate, initialGroup = null, initialCategory = null, user 
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleFocus);
     };
-  }, [i18n.language]);
+  }, [i18n.language, locationName, selectedDistrict]);
 
   const requestLocation = () => new Promise(async (resolve, reject) => {
     try {

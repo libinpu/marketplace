@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import './index.css';
 import './App.css';
-import { House, LayoutGrid, ClipboardList, MessageSquare, UserRound } from 'lucide-react';
+import { House, LayoutGrid, ClipboardList, UserRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import Home from './pages/Home';
 import Services from './pages/Services';
@@ -32,7 +32,7 @@ function App() {
   const [token, setToken] = useState(null);
   const [navigationGroup, setNavigationGroup] = useState(null);
   const [navigationCategory, setNavigationCategory] = useState(null);
-  const [pageHistory, setPageHistory] = useState(['home']);
+  const [_pageHistory, setPageHistory] = useState(['home']);
 
   // Acceptance, Proximity, & Completion notification states
   const [acceptedNotification, setAcceptedNotification] = useState(null);
@@ -108,7 +108,7 @@ function App() {
       setToken(savedToken);
       try {
         setUser(JSON.parse(savedUser));
-      } catch (_) {
+      } catch {
         setUser({});
       }
       setStage('app');
@@ -207,6 +207,20 @@ function App() {
     };
   }, [stage]);
 
+  // Mark a notification as read in the backend
+  const markNotificationAsReadInBackend = useCallback(async (notificationId) => {
+    const activeToken = token || localStorage.getItem('userToken');
+    if (!activeToken || !notificationId) return;
+    try {
+      await fetch(`${API}/notifications/${notificationId}/read`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${activeToken}` }
+      });
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
+  }, [token]);
+
   // Check backend notifications recorded in database
   const checkBackendNotifications = useCallback(async () => {
     const activeToken = token || localStorage.getItem('userToken');
@@ -244,7 +258,7 @@ function App() {
     } catch (err) {
       console.error('Failed to sync backend notifications:', err);
     }
-  }, [token, acceptedNotification, completedNotification]);
+  }, [token, acceptedNotification, completedNotification, markNotificationAsReadInBackend]);
 
   // Establish persistent global SSE connection & periodic sync
   useEffect(() => {
@@ -371,19 +385,6 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, token]);
 
-  // Actions on the Accepted Notification Modal
-  const markNotificationAsReadInBackend = async (notificationId) => {
-    const activeToken = token || localStorage.getItem('userToken');
-    if (!activeToken || !notificationId) return;
-    try {
-      await fetch(`${API}/notifications/${notificationId}/read`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${activeToken}` }
-      });
-    } catch (err) {
-      console.error('Failed to mark notification as read:', err);
-    }
-  };
 
   const handleTrackAccepted = (notif) => {
     if (notif?.id) {

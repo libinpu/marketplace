@@ -111,9 +111,10 @@ function Home({ navigate, unreadCount = 0, user: userProp }) {
   const { t } = useTranslation();
   const user = userProp || (() => { try { return JSON.parse(localStorage.getItem('userData') || '{}'); } catch { return {}; } })();
 
-  // Fetch real professionals
+  // Fetch real professionals with local location wages
   useEffect(() => {
-    fetch(`${API}/professionals`)
+    const cityParam = locationName ? `?city=${encodeURIComponent(locationName)}` : '';
+    fetch(`${API}/professionals${cityParam}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
@@ -123,7 +124,7 @@ function Home({ navigate, unreadCount = 0, user: userProp }) {
             category: p.category || 'Home Services',
             rating: Number(p.avg_rating) || 4.8,
             reviews: Number(p.review_count) || 0,
-            hourly_rate: 200 + Math.min(Number(p.experience_years) || 0, 12) * 25,
+            hourly_rate: p.hourly_rate != null ? Math.round(Number(p.hourly_rate)) : (200 + Math.min(Number(p.experience_years) || 0, 12) * 25),
             distance_km: p.distance_from_user || (1.2 + idx * 0.8).toFixed(1),
             avatar: resolveProPhoto(p.profile_photo),
             fav: false,
@@ -132,7 +133,7 @@ function Home({ navigate, unreadCount = 0, user: userProp }) {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [locationName]);
 
   // Detect location
   useEffect(() => {

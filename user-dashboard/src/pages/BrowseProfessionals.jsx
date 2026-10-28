@@ -61,6 +61,8 @@ const resolvePhotoUrl = (path) => {
 const getProfessionLabel = (category) => CATEGORY_META[category]?.label || category || 'Professional';
 
 const getHourlyRate = (pro) => {
+  if (pro.formatted_hourly_rate) return pro.formatted_hourly_rate;
+  if (pro.hourly_rate != null) return `₹${Math.round(pro.hourly_rate)}`;
   const base = 200 + Math.min(Number(pro.experience_years) || 0, 12) * 25;
   return `₹${base}`;
 };
@@ -133,7 +135,8 @@ function BrowseProfessionals({ navigate, initialCategory = null }) {
   const fetchAllProfessionals = async () => {
     setLoadingPros(true);
     try {
-      const res = await fetch(`${API}/professionals`);
+      const cityParam = locationName ? `?city=${encodeURIComponent(locationName)}` : '';
+      const res = await fetch(`${API}/professionals${cityParam}`);
       const data = await res.json();
       if (!Array.isArray(data)) throw new Error('Invalid response');
 
@@ -162,7 +165,7 @@ function BrowseProfessionals({ navigate, initialCategory = null }) {
   useEffect(() => {
     fetchAllProfessionals();
     requestLocation().catch(() => {});
-  }, []);
+  }, [locationName]);
 
   useEffect(() => {
     if (initialCategory) setActiveCategory(initialCategory);

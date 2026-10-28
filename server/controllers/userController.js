@@ -3,6 +3,7 @@ const { notifyPro } = require('../utils/proSseClients');
 const { broadcast } = require('../utils/sseClients');
 const { addCustomerClient, removeCustomerClient, notifyCustomer } = require('../utils/customerSseClients');
 const { checkAndSend1HourReminders } = require('../services/reminderService');
+const { calculatePrice, resolveLocation, calculateTravelCharge } = require('../services/pricingService');
 
 let profilePhotoColumnEnsured = false;
 async function ensureProfilePhotoColumn() {
@@ -360,6 +361,204 @@ function detectDistrict(text, lat, lon) {
     return null;
 }
 
+const KERALA_CITIES_MAP = {
+    'ottappalam': { city: 'Ottappalam', district: 'Palakkad' },
+    'palakkad': { city: 'Palakkad', district: 'Palakkad' },
+    'chittur': { city: 'Chittur', district: 'Palakkad' },
+    'mannarkkad': { city: 'Mannarkkad', district: 'Palakkad' },
+    'pattambi': { city: 'Pattambi', district: 'Palakkad' },
+    'shoranur': { city: 'Shoranur', district: 'Palakkad' },
+    'kottayam': { city: 'Kottayam', district: 'Kottayam' },
+    'changanassery': { city: 'Changanassery', district: 'Kottayam' },
+    'pala': { city: 'Pala', district: 'Kottayam' },
+    'vaikom': { city: 'Vaikom', district: 'Kottayam' },
+    'erattupetta': { city: 'Erattupetta', district: 'Kottayam' },
+    'kochi': { city: 'Kochi', district: 'Ernakulam' },
+    'cochin': { city: 'Kochi', district: 'Ernakulam' },
+    'ernakulam': { city: 'Kochi', district: 'Ernakulam' },
+    'aluva': { city: 'Aluva', district: 'Ernakulam' },
+    'thrissur': { city: 'Thrissur', district: 'Thrissur' },
+    'trichur': { city: 'Thrissur', district: 'Thrissur' },
+    'chalakudy': { city: 'Chalakudy', district: 'Thrissur' },
+    'guruvayur': { city: 'Guruvayur', district: 'Thrissur' },
+    'thiruvananthapuram': { city: 'Thiruvananthapuram', district: 'Thiruvananthapuram' },
+    'trivandrum': { city: 'Thiruvananthapuram', district: 'Thiruvananthapuram' },
+    'kazhakkoottam': { city: 'Kazhakkoottam', district: 'Thiruvananthapuram' },
+    'attingal': { city: 'Attingal', district: 'Thiruvananthapuram' },
+    'kozhikode': { city: 'Kozhikode', district: 'Kozhikode' },
+    'calicut': { city: 'Kozhikode', district: 'Kozhikode' },
+    'kollam': { city: 'Kollam', district: 'Kollam' },
+    'quilon': { city: 'Kollam', district: 'Kollam' },
+    'alappuzha': { city: 'Alappuzha', district: 'Alappuzha' },
+    'alleppey': { city: 'Alappuzha', district: 'Alappuzha' },
+    'kannur': { city: 'Kannur', district: 'Kannur' },
+    'malappuram': { city: 'Malappuram', district: 'Malappuram' },
+    'kasaragod': { city: 'Kasaragod', district: 'Kasaragod' },
+    'pathanamthitta': { city: 'Pathanamthitta', district: 'Pathanamthitta' },
+    'thodupuzha': { city: 'Thodupuzha', district: 'Idukki' },
+    'kalpetta': { city: 'Kalpetta', district: 'Wayanad' }
+};
+
+function detectCityAndDistrict(text, lat, lon) {
+    if (text && typeof text === 'string') {
+        const lower = text.toLowerCase();
+        for (const [key, val] of Object.entries(KERALA_CITIES_MAP)) {
+            const regex = new RegExp(`\\b${key}\\b`, 'i');
+            if (regex.test(lower)) {
+                return val;
+            }
+        }
+    }
+    const detectedDist = detectDistrict(text, lat, lon);
+    if (detectedDist) {
+        return { city: detectedDist, district: detectedDist };
+    }
+    return { city: null, district: null };
+}
+
+// GET /api/user/pricing/lookup - Dynamic authoritative lookup for service price breakdown
+exports.lookupServicePrice = async (req, res) => {
+    try {
+        const { city, district, locality, category, category_id, job_type_id, professional_id, latitude, longitude } = req.query;
+
+        let targetCity = city && typeof city === 'string' && city.trim() ? city.trim() : null;
+        let targetDistrict = district && typeof district === 'string' && district.trim() ? district.trim() : null;
+        let targetLocality = locality && typeof locality === 'string' && locality.trim() ? locality.trim() : null;
+        let targetCategory = category && typeof category === 'string' && category.trim() ? category.trim() : null;
+        let targetCategoryId = category_id ? Number(category_id) : null;
+        let proLat = null;
+        let proLon = null;
+
+        // If city was provided without district, resolve from kerala_locations or alias map
+        if (targetCity && !targetDistrict) {
+            const locRes = await pool.query(
+                'SELECT district, city FROM kerala_locations WHERE LOWER(city) = LOWER($1) LIMIT 1',
+                [targetCity]
+            );
+            if (locRes.rows.length > 0) {
+                targetCity = locRes.rows[0].city;
+                targetDistrict = locRes.rows[0].district;
+            } else {
+                const found = KERALA_CITIES_MAP[targetCity.toLowerCase()];
+                if (found) {
+                    targetCity = found.city;
+                    targetDistrict = found.district;
+                }
+            }
+        }
+
+        // If professional_id is specified, validate provider coverage and coordinates
+        if (professional_id && professional_id !== 'undefined' && professional_id !== 'null') {
+            const proRes = await pool.query(
+                `SELECT id, full_name, category, city, district, address, work_location_name, work_radius,
+                        COALESCE(current_latitude, registered_latitude) AS pro_lat,
+                        COALESCE(current_longitude, registered_longitude) AS pro_lon
+                 FROM professionals WHERE id = $1`,
+                [professional_id]
+            );
+            if (proRes.rows.length > 0) {
+                const pro = proRes.rows[0];
+                if (!targetCategory && !targetCategoryId) targetCategory = pro.category;
+                proLat = pro.pro_lat;
+                proLon = pro.pro_lon;
+
+                // Validate provider service location / coverage
+                if (targetCity) {
+                    const servesCity = (
+                        (pro.city && pro.city.toLowerCase() === targetCity.toLowerCase()) ||
+                        (pro.district && targetDistrict && pro.district.toLowerCase() === targetDistrict.toLowerCase()) ||
+                        (pro.address && pro.address.toLowerCase().includes(targetCity.toLowerCase()))
+                    );
+                    if (!servesCity) {
+                        return res.status(400).json({
+                            available: false,
+                            coverageMismatch: true,
+                            message: `Selected provider ${pro.full_name} does not serve ${targetCity}.`
+                        });
+                    }
+                } else {
+                    targetCity = pro.city || targetCity;
+                    targetDistrict = pro.district || targetDistrict;
+                }
+            }
+        }
+
+        const pricingResult = await calculatePrice({
+            categoryId: targetCategoryId,
+            categoryName: targetCategory,
+            jobTypeId: job_type_id ? Number(job_type_id) : null,
+            district: targetDistrict,
+            city: targetCity,
+            locality: targetLocality,
+            providerLat: proLat,
+            providerLon: proLon,
+            serviceLat: latitude,
+            serviceLon: longitude
+        });
+
+        if (!pricingResult.available) {
+            return res.status(200).json({
+                available: false,
+                city: targetCity,
+                district: targetDistrict,
+                category: targetCategory,
+                message: pricingResult.message || 'Pricing is not configured for this service location. Please contact support.'
+            });
+        }
+
+        const breakdown = pricingResult.pricing_breakdown;
+        res.json({
+            available: true,
+            id: pricingResult.location?.id,
+            district: pricingResult.location?.district,
+            city: pricingResult.location?.city,
+            locality: pricingResult.location?.locality,
+            category_id: pricingResult.category_id,
+            category_name: pricingResult.category_name,
+            job_type_id: pricingResult.job_type_id,
+            price: breakdown.final_labour_price,
+            base_price: breakdown.base_price,
+            applied_adjustment: breakdown.applied_adjustment,
+            exact_override: breakdown.exact_override,
+            travel: breakdown.travel,
+            estimated_total: breakdown.estimated_total,
+            currency: breakdown.currency,
+            formatted_price: `₹${breakdown.final_labour_price.toFixed(0)}`,
+            pricing_breakdown: breakdown
+        });
+    } catch (err) {
+        console.error('lookupServicePrice error:', err);
+        res.status(500).json({ available: false, message: 'Failed to look up service price' });
+    }
+};
+
+// GET /api/user/pricing/locations - Return verified districts and cities configured
+exports.getPricingLocations = async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT id, district, city, locality, location_type, pincode, latitude, longitude, verification_status
+            FROM kerala_locations
+            WHERE is_active = TRUE
+            ORDER BY district ASC, city ASC
+        `);
+        const districtMap = {};
+        result.rows.forEach(r => {
+            if (!districtMap[r.district]) districtMap[r.district] = [];
+            if (!districtMap[r.district].includes(r.city)) districtMap[r.district].push(r.city);
+        });
+        res.json({
+            locations: result.rows,
+            districts: Object.keys(districtMap),
+            citiesByDistrict: districtMap,
+            total_locations: result.rows.length
+        });
+    } catch (err) {
+        console.error('getPricingLocations error:', err);
+        res.status(500).json({ message: 'Failed to fetch pricing locations' });
+    }
+};
+
+
 // GET /api/user/district-pricing - list all Kerala district pricing tiers
 exports.getDistrictPricing = async (req, res) => {
     try {
@@ -375,10 +574,10 @@ exports.getDistrictPricing = async (req, res) => {
     }
 };
 
-// GET /api/user/categories - list all service categories
+// GET /api/user/categories - list all service categories with dynamic location pricing
 exports.getCategories = async (req, res) => {
     try {
-        const { lang } = req.query;
+        const { lang, city, district } = req.query;
         let selectQuery = `
             SELECT id, name, description, price_estimate, name AS original_name,
                    (SELECT COUNT(*)::int FROM professionals p 
@@ -400,7 +599,30 @@ exports.getCategories = async (req, res) => {
             `;
         }
         const result = await pool.query(selectQuery);
-        res.json(result.rows);
+        let rows = result.rows;
+
+        if (city || district) {
+            rows = await Promise.all(rows.map(async (cat) => {
+                try {
+                    const priceRes = await calculatePrice({
+                        categoryName: cat.original_name || cat.name,
+                        city: city || null,
+                        district: district || null
+                    });
+                    if (priceRes.available && priceRes.pricing_breakdown?.final_labour_price) {
+                        return {
+                            ...cat,
+                            price_estimate: `From ₹${Math.round(priceRes.pricing_breakdown.final_labour_price)}`
+                        };
+                    }
+                } catch (e) {
+                    // keep default estimate
+                }
+                return cat;
+            }));
+        }
+
+        res.json(rows);
     } catch (err) {
         console.error('getCategories error:', err);
         res.status(500).json({ message: 'Failed to fetch categories' });
@@ -409,7 +631,7 @@ exports.getCategories = async (req, res) => {
 
 exports.getSubcategories = async (req, res) => {
     try {
-        const { category, lang } = req.query;
+        const { category, lang, city, district } = req.query;
         let query = 'SELECT id, category_id, category_name, name, image_url, price_estimate FROM subcategories';
         if (lang === 'ml') {
             query = 'SELECT id, category_id, COALESCE(category_name_ml, category_name) AS category_name, COALESCE(name_ml, name) AS name, image_url, price_estimate FROM subcategories';
@@ -421,7 +643,31 @@ exports.getSubcategories = async (req, res) => {
         }
         query += ' ORDER BY category_name ASC, id ASC';
         const result = await pool.query(query, params);
-        res.json(result.rows);
+        let rows = result.rows;
+
+        if (city || district) {
+            rows = await Promise.all(rows.map(async (sub) => {
+                try {
+                    const priceRes = await calculatePrice({
+                        categoryName: sub.category_name,
+                        jobTypeId: sub.id,
+                        city: city || null,
+                        district: district || null
+                    });
+                    if (priceRes.available && priceRes.pricing_breakdown?.final_labour_price) {
+                        return {
+                            ...sub,
+                            price_estimate: `From ₹${Math.round(priceRes.pricing_breakdown.final_labour_price)}`
+                        };
+                    }
+                } catch (e) {
+                    // keep default estimate
+                }
+                return sub;
+            }));
+        }
+
+        res.json(rows);
     } catch (err) {
         console.error('getSubcategories error:', err);
         res.status(500).json({ message: 'Failed to fetch subcategories' });
@@ -431,7 +677,7 @@ exports.getSubcategories = async (req, res) => {
 // GET /api/user/professionals?category=Plumbing&district=Ernakulam - list verified professionals from destination area
 exports.getProfessionals = async (req, res) => {
     try {
-        const { category, latitude, longitude, district } = req.query;
+        const { category, latitude, longitude, district, city } = req.query;
         const params = [];
         let where = "WHERE p.verification_status = 'verified'";
         if (category) {
@@ -526,8 +772,38 @@ exports.getProfessionals = async (req, res) => {
             };
         });
 
+        // Compute accurate local wage for each professional based on their location or requested city/district
+        const enriched = await Promise.all(mapped.map(async (p) => {
+            const targetCity = city || p.city;
+            const targetDist = district || p.district;
+            let wage = 200 + Math.min(Number(p.experience_years) || 0, 12) * 25;
+            let formattedWage = `₹${wage}`;
+
+            if (p.category && (targetCity || targetDist)) {
+                try {
+                    const priceRes = await calculatePrice({
+                        categoryName: p.category,
+                        city: targetCity,
+                        district: targetDist
+                    });
+                    if (priceRes.available && priceRes.pricing_breakdown?.final_labour_price) {
+                        wage = priceRes.pricing_breakdown.final_labour_price;
+                        formattedWage = `₹${Math.round(wage)}`;
+                    }
+                } catch (calcErr) {
+                    // Fall back to base wage
+                }
+            }
+
+            return {
+                ...p,
+                hourly_rate: wage,
+                formatted_hourly_rate: formattedWage
+            };
+        }));
+
         if (hasCoords) {
-            mapped.sort((a, b) => {
+            enriched.sort((a, b) => {
                 if (a.distance_from_user != null && b.distance_from_user != null) {
                     return a.distance_from_user - b.distance_from_user;
                 }
@@ -535,7 +811,7 @@ exports.getProfessionals = async (req, res) => {
             });
         }
 
-        res.json(mapped);
+        res.json(enriched);
     } catch (err) {
         console.error('getProfessionals error:', err);
         res.status(500).json({ message: 'Failed to fetch professionals' });
@@ -573,10 +849,13 @@ exports.createRequest = async (req, res) => {
             return res.status(400).json({ message: 'Expected professional arrival time must be in the future' });
         }
 
-        // Determine destination district where the service will take place
-        const destinationDistrict = rawDistrict
+        // Resolve destination city & district from input, provider, or reverse-geocoding
+        const rawCity = (req.body.city || req.body.service_city || '').trim();
+        const detected = detectCityAndDistrict(location, latitude, longitude);
+        let destinationCity = rawCity || (detected ? detected.city : null);
+        let destinationDistrict = rawDistrict
             ? (normalizeDistrict(rawDistrict) || rawDistrict.trim())
-            : detectDistrict(location, latitude, longitude);
+            : (detected ? detected.district : detectDistrict(location, latitude, longitude));
 
         const client = await pool.connect();
         try {
@@ -585,24 +864,90 @@ exports.createRequest = async (req, res) => {
             await client.query('ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50)');
             await client.query('ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS transaction_id VARCHAR(100)');
             await client.query('ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS district VARCHAR(100)');
+            await client.query('ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS service_city VARCHAR(100)');
+            await client.query('ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS pricing_source VARCHAR(50) DEFAULT \'city_category_pricing\'');
+            await client.query('ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS base_price NUMERIC');
             await client.query('ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS pricing_markup_percentage NUMERIC DEFAULT 0');
 
-            // Resolve official markup percentage from district_pricing_tiers
-            let markupPercentage = 0;
-            if (destinationDistrict) {
-                const tierResult = await client.query(
-                    'SELECT markup_percentage FROM district_pricing_tiers WHERE district ILIKE $1',
-                    [destinationDistrict]
-                );
-                if (tierResult.rows.length > 0) {
-                    markupPercentage = Number(tierResult.rows[0].markup_percentage) || 0;
+            const categoryAliases = CATEGORY_ALIASES[category] || [category];
+
+            // If a specific professional was selected, validate provider coverage & service location
+            let selectedProfessional = null;
+            if (professional_id && professional_id !== 'undefined' && professional_id !== 'null') {
+                const proResult = await client.query('SELECT * FROM professionals WHERE id = $1', [professional_id]);
+                if (proResult.rows.length > 0) {
+                    selectedProfessional = proResult.rows[0];
+
+                    // Provider coverage validation:
+                    // If a specific service city was explicitly selected by the customer
+                    if (rawCity) {
+                        const servesCity = (
+                            (selectedProfessional.city && selectedProfessional.city.toLowerCase() === rawCity.toLowerCase()) ||
+                            (selectedProfessional.district && destinationDistrict && selectedProfessional.district.toLowerCase() === destinationDistrict.toLowerCase()) ||
+                            (selectedProfessional.address && selectedProfessional.address.toLowerCase().includes(rawCity.toLowerCase()))
+                        );
+                        if (!servesCity) {
+                            await client.query('ROLLBACK');
+                            return res.status(400).json({
+                                message: `The selected professional (${selectedProfessional.full_name}) does not serve ${rawCity}. Please select a supported service location.`
+                            });
+                        }
+                    } else {
+                        // Business rule: use the selected provider's service city & district
+                        destinationCity = selectedProfessional.city || destinationCity;
+                        destinationDistrict = selectedProfessional.district || destinationDistrict;
+                    }
                 }
-            } else if (Number.isFinite(Number(rawMarkup))) {
-                markupPercentage = Number(rawMarkup);
             }
 
-            // Fetch online verified professionals for category
-            const categoryAliases = CATEGORY_ALIASES[category] || [category];
+            // AUTHORITATIVE BACKEND PRICING CALCULATION
+            // Uses calculatePrice to apply base rate, location adjustment, exact overrides, and separate travel charges
+            const pricingResult = await calculatePrice({
+                categoryName: category,
+                district: destinationDistrict,
+                city: destinationCity,
+                locality: req.body.locality || null,
+                providerLat: selectedProfessional ? (selectedProfessional.current_latitude || selectedProfessional.registered_latitude) : null,
+                providerLon: selectedProfessional ? (selectedProfessional.current_longitude || selectedProfessional.registered_longitude) : null,
+                serviceLat: latitude,
+                serviceLon: longitude
+            });
+
+            if (!pricingResult.available) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({
+                    message: pricingResult.message || 'Pricing is not configured for this service location. Please contact support.'
+                });
+            }
+
+            const pb = pricingResult.pricing_breakdown;
+            const finalLabourWage = pb.final_labour_price;
+            const travelFee = pb.travel?.travel_charge || 0;
+            const finalAmount = pb.estimated_total;
+            const basePrice = pb.base_price;
+
+            // Immutable pricing snapshot saved with historical booking record
+            const pricingSnapshot = {
+                service_location: {
+                    city: pricingResult.location?.city || destinationCity,
+                    district: pricingResult.location?.district || destinationDistrict,
+                    locality: pricingResult.location?.locality || null,
+                    location_type: pricingResult.location?.location_type || 'town'
+                },
+                category: category,
+                category_id: pricingResult.category_id,
+                base_price: basePrice,
+                applied_adjustment: pb.applied_adjustment,
+                exact_override: pb.exact_override,
+                labour_price: finalLabourWage,
+                travel_charge: travelFee,
+                travel_details: pb.travel,
+                final_amount: finalAmount,
+                currency: pb.currency,
+                confirmed_at: new Date().toISOString()
+            };
+
+            // Fetch online verified professionals for category & destination area
             const professionals = await client.query(
                 `SELECT p.id, p.full_name, p.district, p.city, p.address,
                         p.registered_latitude, p.registered_longitude,
@@ -622,7 +967,7 @@ exports.createRequest = async (req, res) => {
                                  AND active_offer.status = 'accepted'
                                  AND active_request.status IN ('accepted', 'in_progress')
                      )`,
-                [categoryAliases, professional_id && professional_id !== 'undefined' ? professional_id : null]
+                [categoryAliases, professional_id && professional_id !== 'undefined' && professional_id !== 'null' ? professional_id : null]
             );
 
             const userLatitude = Number(latitude);
@@ -630,7 +975,7 @@ exports.createRequest = async (req, res) => {
             const hasCoords = Number.isFinite(userLatitude) && Number.isFinite(userLongitude);
 
             let nearbyProfessionals = [];
-            if (professional_id && professional_id !== 'undefined') {
+            if (professional_id && professional_id !== 'undefined' && professional_id !== 'null') {
                 nearbyProfessionals = professionals.rows;
             } else {
                 // 1. First priority: match professionals nearest to destination coordinates (within 35 km)
@@ -657,14 +1002,16 @@ exports.createRequest = async (req, res) => {
                     }
                 }
 
-                // 2. Second priority: match professionals in the destination district
-                if (!nearbyProfessionals.length && destinationDistrict) {
-                    const target = destinationDistrict.toLowerCase();
+                // 2. Second priority: match professionals in the destination district or city
+                if (!nearbyProfessionals.length && (destinationCity || destinationDistrict)) {
+                    const targetDist = (destinationDistrict || '').toLowerCase();
+                    const targetCityLower = (destinationCity || '').toLowerCase();
                     const districtMatches = professionals.rows.filter(p => {
                         const pDist = (p.district || '').toLowerCase();
                         const pCity = (p.city || '').toLowerCase();
                         const pAddr = (p.address || '').toLowerCase();
-                        return pDist.includes(target) || pCity.includes(target) || pAddr.includes(target);
+                        return (targetCityLower && (pCity.includes(targetCityLower) || pAddr.includes(targetCityLower))) ||
+                               (targetDist && (pDist.includes(targetDist) || pAddr.includes(targetDist)));
                     });
                     if (districtMatches.length > 0) {
                         nearbyProfessionals = districtMatches;
@@ -680,19 +1027,19 @@ exports.createRequest = async (req, res) => {
             if (!nearbyProfessionals.length) {
                 await client.query('ROLLBACK');
                 return res.status(404).json({
-                    message: destinationDistrict
-                        ? `No available online professionals found in ${destinationDistrict} at the moment. Please try again shortly.`
+                    message: destinationCity
+                        ? `No available online professionals found in ${destinationCity} at the moment. Please try again shortly.`
                         : 'No available online professionals were found in your destination area at the moment. Please try again shortly.'
                 });
             }
 
-            const finalWage = wage ? Number(wage) : null;
             const result = await client.query(
                 `INSERT INTO service_requests (
                     customer_id, title, description, requested_at, location, latitude, longitude,
-                    photo_urls, video_url, voice_url, status, payment_status, payment_method, transaction_id, wage,
-                    district, pricing_markup_percentage, final_amount
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $12, $13, $14, $15, $16, $17) RETURNING *`,
+                    photo_urls, video_url, voice_url, status, payment_status, payment_method, transaction_id, 
+                    wage, labour_price, travel_fee, base_price, final_amount, district, service_city, 
+                    pricing_source, pricing_markup_percentage, pricing_snapshot
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 'location_pricing_engine', $21, $22) RETURNING *`,
                 [
                     customerId,
                     title,
@@ -707,10 +1054,15 @@ exports.createRequest = async (req, res) => {
                     payment_status || 'pending',
                     payment_method || 'cash',
                     transaction_id || null,
-                    finalWage,
-                    destinationDistrict || 'Kerala',
-                    markupPercentage,
-                    finalWage
+                    finalLabourWage,
+                    finalLabourWage,
+                    travelFee,
+                    basePrice,
+                    finalAmount,
+                    pricingResult.location?.district || destinationDistrict,
+                    pricingResult.location?.city || destinationCity,
+                    pb.applied_adjustment?.value || 0,
+                    JSON.stringify(pricingSnapshot)
                 ]
             );
             const request = result.rows[0];
